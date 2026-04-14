@@ -17,6 +17,7 @@
 
 html {
   scroll-behavior: smooth;
+  overflow-x: clip;
 }
 
 body {
@@ -27,7 +28,7 @@ body {
     var(--bg);
   color: var(--text);
   line-height: 1.5;
-  overflow-x: hidden;
+  overflow-x: clip;
 }
 
 h1,
@@ -49,6 +50,7 @@ a {
 .container {
   width: min(1140px, calc(100% - 2rem));
   margin: 0 auto;
+  min-width: 0;
 }
 
 .bg-orb {
@@ -91,11 +93,13 @@ a {
   align-items: center;
   justify-content: space-between;
   gap: 1rem;
+  min-width: 0;
 }
 
 .logo img {
   width: min(390px, 58vw);
   display: block;
+  max-width: 100%;
 }
 
 .main-nav {
@@ -159,6 +163,7 @@ a {
   display: grid;
   grid-template-columns: 1.3fr 1fr;
   gap: 1.4rem;
+  min-width: 0;
 }
 
 .hero-content {
@@ -167,6 +172,7 @@ a {
   border-radius: var(--radius);
   padding: 2rem;
   box-shadow: var(--shadow);
+  min-width: 0;
 }
 
 .hero-content h1 {
@@ -219,6 +225,7 @@ a {
   color: #e7f4ff;
   padding: 2rem;
   border: 1px solid #0f4376;
+  min-width: 0;
 }
 
 .hero-panel h2 {
@@ -259,6 +266,7 @@ a {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 1rem;
+  min-width: 0;
 }
 
 .card {
@@ -267,6 +275,7 @@ a {
   border-radius: var(--radius);
   padding: 1.35rem;
   box-shadow: 0 8px 30px rgba(9, 24, 40, 0.05);
+  min-width: 0;
 }
 
 .card h3 {
@@ -283,6 +292,7 @@ a {
   display: grid;
   grid-template-columns: 1.2fr 1fr;
   gap: 1.4rem;
+  min-width: 0;
 }
 
 .check-list {
@@ -362,6 +372,7 @@ a {
   padding: 0;
   overflow: hidden;
   box-shadow: 0 8px 30px rgba(9, 24, 40, 0.05);
+  min-width: 0;
 }
 
 .promo-video {
@@ -372,6 +383,7 @@ a {
   object-fit: cover;
   background: transparent;
   display: block;
+  max-width: 100%;
 }
 
 .lead-form {
@@ -382,6 +394,7 @@ a {
   border: 1px solid var(--line);
   border-radius: var(--radius);
   padding: 1.15rem;
+  min-width: 0;
 }
 
 .lead-form button[type="submit"] {
@@ -435,12 +448,14 @@ a {
   display: grid;
   grid-template-columns: 1.2fr 1fr 1fr;
   gap: 1rem;
+  min-width: 0;
 }
 
 .footer-logo {
   width: min(350px, 95%);
   display: block;
   margin-bottom: 0.6rem;
+  max-width: 100%;
 }
 
 .site-footer h3 {
@@ -518,6 +533,7 @@ a {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 1rem;
+  min-width: 0;
 }
 
 .price-card {
@@ -563,6 +579,10 @@ a {
 }
 
 @media (max-width: 720px) {
+  .bg-orb {
+    display: none;
+  }
+
   .container {
     width: min(1140px, calc(100% - 1.25rem));
   }
@@ -682,5 +702,20 @@ a {
 
   .footer-logo {
     width: min(280px, 96%);
+  }
+}
+
+@media (max-width: 400px) {
+  .header-inner {
+    gap: 0.45rem;
+  }
+
+  .logo img {
+    width: min(165px, 46vw);
+  }
+
+  #phone-link-header {
+    padding: 0.5rem 0.62rem;
+    font-size: 0.78rem;
   }
 }
