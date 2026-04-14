@@ -1,0 +1,189 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title id="meta-title">Облачный Мост - Замена счетчиков, сантехника и умный дом</title>
+    <meta
+      id="meta-description"
+      name="description"
+      content="Замена и установка счетчиков воды и тепла, сантехнические работы, подключение систем умного дома и облачный контроль SAURES. Москва и Московская область."
+    />
+
+    <link rel="icon" type="image/svg+xml" href="assets/favicons/favicon.svg" />
+    <link rel="icon" type="image/png" href="assets/favicons/favicon-96x96.png" sizes="96x96" />
+    <link rel="icon" href="assets/favicons/favicon.ico" />
+    <link rel="apple-touch-icon" href="assets/favicons/apple-touch-icon.png" />
+    <link rel="manifest" href="assets/favicons/site.webmanifest" />
+
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;700;800&family=Unbounded:wght@500;700&display=swap"
+      rel="stylesheet"
+    />
+
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <div class="bg-orb orb-1"></div>
+    <div class="bg-orb orb-2"></div>
+
+    <header class="site-header" id="top">
+      <div class="container header-inner">
+        <a class="logo" href="#top" aria-label="Облачный Мост">
+          <img src="assets/brand/logo-main.svg" alt="Облачный Мост" id="brand-logo" />
+        </a>
+        <nav class="main-nav" aria-label="Основная навигация">
+          <a href="#services">Услуги</a>
+          <a href="#prices">Цены</a>
+          <a href="#about">О компании</a>
+          <a href="#video">Видео</a>
+          <a href="#steps">Этапы</a>
+          <a href="#reviews">Отзывы</a>
+          <a href="#contacts">Контакты</a>
+        </nav>
+        <a class="btn btn-outline" id="phone-link-header" href="tel:+74951234567">Позвонить</a>
+      </div>
+    </header>
+
+    <main>
+      <section class="hero container reveal">
+        <div class="hero-content">
+          <p class="eyebrow" id="region-text">Москва и Московская область</p>
+          <h1 id="hero-title">Замена счетчиков, сантехнические работы и умный дом под ключ</h1>
+          <p id="hero-text">
+            Работаем честно: приходим вовремя, фиксируем цену до начала работ, выдаем документы
+            и не навязываем лишние услуги.
+          </p>
+          <div class="hero-actions">
+            <a class="btn btn-primary" href="#form" id="hero-cta-primary">Оставить заявку</a>
+          </div>
+          <ul class="hero-badges" id="hero-badges"></ul>
+        </div>
+        <aside class="hero-panel">
+          <h2 id="saures-title">Партнерские решения SAURES</h2>
+          <p id="saures-text">
+            Подключаем облачную систему контроля счетчиков и датчиков. Подбираем оборудование
+            для квартиры, частного дома и коммерческих объектов.
+          </p>
+          <a id="saures-link" href="https://www.saures.ru/" target="_blank" rel="noopener noreferrer">Сайт SAURES</a>
+        </aside>
+      </section>
+
+      <section class="section container reveal" id="services">
+        <div class="section-head">
+          <p class="eyebrow">Что делаем</p>
+          <h2>Услуги</h2>
+        </div>
+        <div class="services-grid" id="services-grid"></div>
+      </section>
+
+      <section class="section section-alt reveal" id="prices">
+        <div class="container">
+          <div class="section-head">
+            <p class="eyebrow">Прозрачный прайс</p>
+            <h2>Точные цены</h2>
+          </div>
+          <div class="prices-grid" id="prices-grid"></div>
+        </div>
+      </section>
+
+      <section class="section section-alt reveal" id="about">
+        <div class="container about-layout">
+          <div>
+            <p class="eyebrow">Почему нам доверяют</p>
+            <h2>О компании</h2>
+            <p id="about-text"></p>
+          </div>
+          <ul class="check-list" id="advantages-list"></ul>
+        </div>
+      </section>
+
+      <section class="section container reveal" id="video">
+        <div class="section-head">
+          <p class="eyebrow" id="video-eyebrow">Как Это Работает</p>
+          <h2 id="video-title">Водосчетчики Wi-Fi, подключение и настройка</h2>
+        </div>
+        <div class="video-card">
+          <video controls preload="metadata" playsinline class="promo-video">
+            <source id="video-source" src="assets/media/setup-video.mp4" type="video/mp4" />
+            Ваш браузер не поддерживает видео.
+          </video>
+        </div>
+      </section>
+
+      <section class="section container reveal" id="steps">
+        <div class="section-head">
+          <p class="eyebrow">Как работаем</p>
+          <h2>Этапы</h2>
+        </div>
+        <ol class="steps" id="steps-list"></ol>
+      </section>
+
+      <section class="section section-alt reveal" id="reviews">
+        <div class="container">
+          <div class="section-head">
+            <p class="eyebrow">Репутация</p>
+            <h2>Отзывы клиентов</h2>
+          </div>
+          <div class="reviews-grid" id="reviews-grid"></div>
+        </div>
+      </section>
+
+      <section class="section container reveal" id="form">
+        <div class="section-head">
+          <p class="eyebrow">Свяжемся быстро</p>
+          <h2>Оставить заявку</h2>
+        </div>
+        <form class="lead-form" id="lead-form" novalidate enctype="multipart/form-data">
+          <label>
+            Имя *
+            <input type="text" name="name" autocomplete="name" required />
+          </label>
+          <label>
+            Телефон *
+            <input type="tel" name="phone" autocomplete="tel" required />
+          </label>
+          <label>
+            Услуга
+            <select name="service" id="service-select"></select>
+          </label>
+          <label class="full-width">
+            Комментарий *
+            <textarea name="comment" rows="4" placeholder="Опишите задачу" required></textarea>
+          </label>
+          <label class="full-width">
+            Файл * (фото/видео/PDF)
+            <input type="file" name="file" accept="image/*,video/*,application/pdf" required />
+          </label>
+          <button class="btn btn-primary" type="submit">Отправить заявку</button>
+          <p class="form-note" id="form-note">Нажимая кнопку, вы соглашаетесь на обработку персональных данных.</p>
+        </form>
+      </section>
+    </main>
+
+    <footer class="site-footer" id="contacts">
+      <div class="container footer-grid">
+        <div>
+          <img src="assets/brand/logo-main.svg" alt="Облачный Мост" class="footer-logo" id="footer-logo" />
+          <p id="footer-slogan">Соединяя миры через технологии</p>
+        </div>
+        <div>
+          <h3>Контакты</h3>
+          <p><a id="phone-link-footer" href="tel:+74951234567">+7 (495) 123-45-67</a></p>
+          <p><a id="email-link" href="mailto:info@oblachny-most.ru">info@oblachny-most.ru</a></p>
+          <p id="footer-region">Москва и Московская область</p>
+        </div>
+        <div>
+          <h3>Реквизиты ИП</h3>
+          <p>ИНН: <strong id="inn-text">744820342691</strong></p>
+          <p>ОГРНИП: <strong id="ogrnip-text">325774600156430</strong></p>
+          <p><a href="admin.html" style="color:#9fd7ff">Админ-панель</a></p>
+        </div>
+      </div>
+    </footer>
+
+    <script src="script.js"></script>
+  </body>
+</html>

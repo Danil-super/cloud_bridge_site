@@ -1,0 +1,200 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Админ-панель - Облачный Мост</title>
+    <link rel="stylesheet" href="styles.css" />
+    <style>
+      body { background: #edf6ff; }
+      .admin-wrap { padding: 2rem 0 3rem; }
+      .admin-grid { display: grid; gap: 1rem; }
+      .admin-card { background: #fff; border: 1px solid #d7e9f8; border-radius: 18px; padding: 1rem; }
+      .admin-card h2 { font-size: 1.1rem; }
+      .admin-form { display: grid; gap: 0.8rem; }
+      .admin-form label { display: grid; gap: 0.32rem; font-weight: 700; }
+      .admin-form input, .admin-form textarea { font: inherit; border: 1px solid #bfdcf4; border-radius: 10px; padding: 0.7rem; }
+      .admin-actions { display: flex; flex-wrap: wrap; gap: 0.7rem; }
+      .hint { color: #4a5f76; font-size: 0.9rem; }
+      .editor-list { display: grid; gap: 0.8rem; }
+      .editor-item {
+        border: 1px solid #d5e8f9;
+        border-radius: 12px;
+        padding: 0.8rem;
+        display: grid;
+        gap: 0.55rem;
+        background: #f8fcff;
+      }
+      .editor-row { display: grid; gap: 0.32rem; }
+      .thumb {
+        width: 100%;
+        max-width: 260px;
+        height: 140px;
+        object-fit: cover;
+        border-radius: 10px;
+        border: 1px solid #c4dff5;
+      }
+      .danger {
+        border-color: #efb3b3;
+        color: #9f2222;
+      }
+      .tabs {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.6rem;
+        padding: 0.7rem;
+        background: #fff;
+        border: 1px solid #d7e9f8;
+        border-radius: 14px;
+        position: sticky;
+        top: 92px;
+        z-index: 9;
+      }
+      .tab-btn {
+        border: 1px solid #c7def3;
+        background: #f5fbff;
+        color: #224969;
+        border-radius: 10px;
+        padding: 0.55rem 0.8rem;
+        font-weight: 700;
+        cursor: pointer;
+      }
+      .tab-btn.is-active {
+        background: linear-gradient(135deg, #1e90e6, #0b6db7);
+        color: #fff;
+        border-color: transparent;
+      }
+      .tab-pane { display: none; }
+      .tab-pane.is-active { display: grid; gap: 1rem; }
+      @media (max-width: 980px) {
+        .tabs { top: 74px; }
+      }
+    </style>
+  </head>
+  <body>
+    <header class="site-header">
+      <div class="container header-inner">
+        <strong>Админ-панель сайта</strong>
+        <div class="admin-actions"><a href="index.html" class="btn btn-outline">Открыть сайт</a></div>
+      </div>
+    </header>
+
+    <main class="admin-wrap">
+      <div class="container admin-grid">
+        <div class="tabs" role="tablist" aria-label="Разделы админки">
+          <button class="tab-btn is-active" data-tab-target="services" type="button">Услуги</button>
+          <button class="tab-btn" data-tab-target="prices" type="button">Цены</button>
+          <button class="tab-btn" data-tab-target="about" type="button">О компании</button>
+          <button class="tab-btn" data-tab-target="video" type="button">Видео</button>
+          <button class="tab-btn" data-tab-target="steps" type="button">Этапы</button>
+          <button class="tab-btn" data-tab-target="reviews" type="button">Отзывы</button>
+          <button class="tab-btn" data-tab-target="contacts" type="button">Контакты</button>
+        </div>
+
+        <form class="admin-form" id="admin-form">
+          <section class="tab-pane is-active" data-tab-content="services">
+            <section class="admin-card">
+              <h2>Услуги</h2>
+              <div id="services-editor" class="editor-list"></div>
+              <button class="btn btn-outline" id="add-service-btn" type="button">Добавить услугу</button>
+            </section>
+          </section>
+
+          <section class="tab-pane" data-tab-content="prices">
+            <section class="admin-card">
+              <h2>Товары в блоке Цены</h2>
+              <p class="hint">Добавляй карточки с ценой, описанием и картинкой.</p>
+              <div id="prices-editor" class="editor-list"></div>
+              <button class="btn btn-outline" id="add-price-btn" type="button">Добавить товар</button>
+            </section>
+          </section>
+
+          <section class="tab-pane" data-tab-content="about">
+            <section class="admin-card">
+              <h2>Главный экран</h2>
+              <label>Заголовок <textarea rows="2" name="heroTitle"></textarea></label>
+              <label>Текст <textarea rows="3" name="heroText"></textarea></label>
+              <label>Текст основной кнопки <input name="heroPrimaryCta" /></label>
+              <p class="hint">Бейджи на главном экране</p>
+              <div id="hero-badges-editor" class="editor-list"></div>
+              <button class="btn btn-outline" id="add-hero-badge-btn" type="button">Добавить бейдж</button>
+            </section>
+
+            <section class="admin-card">
+              <h2>SAURES и блок О компании</h2>
+              <label>Заголовок SAURES <input name="sauresTitle" /></label>
+              <label>Текст SAURES <textarea rows="3" name="sauresText"></textarea></label>
+              <label>Ссылка SAURES <input name="sauresLink" /></label>
+              <label>Текст о компании <textarea rows="4" name="aboutText"></textarea></label>
+              <p class="hint">Преимущества компании</p>
+              <div id="advantages-editor" class="editor-list"></div>
+              <button class="btn btn-outline" id="add-advantage-btn" type="button">Добавить преимущество</button>
+            </section>
+          </section>
+
+          <section class="tab-pane" data-tab-content="video">
+            <section class="admin-card">
+              <h2>Видео</h2>
+              <label>Подзаголовок (eyebrow) <input name="videoEyebrow" /></label>
+              <label>Название видео <input name="videoTitle" /></label>
+              <label>Путь к видео или URL <input name="videoSrc" /></label>
+              <label>Выбрать видеофайл
+                <input id="video-file-input" type="file" accept="video/*" />
+              </label>
+              <div class="admin-actions">
+                <button class="btn btn-outline" id="upload-video-btn" type="button">Загрузить видео</button>
+                <span class="hint" id="video-upload-status"></span>
+              </div>
+              <video id="video-preview" class="promo-video" controls preload="metadata" style="max-height: 320px;"></video>
+              <p class="hint">Пример локального пути: <strong>assets/media/setup-video.mp4</strong></p>
+            </section>
+          </section>
+
+          <section class="tab-pane" data-tab-content="steps">
+            <section class="admin-card">
+              <h2>Этапы работы</h2>
+              <div id="steps-editor" class="editor-list"></div>
+              <button class="btn btn-outline" id="add-step-btn" type="button">Добавить этап</button>
+            </section>
+          </section>
+
+          <section class="tab-pane" data-tab-content="reviews">
+            <section class="admin-card">
+              <h2>Отзывы клиентов</h2>
+              <div id="reviews-editor" class="editor-list"></div>
+              <button class="btn btn-outline" id="add-review-btn" type="button">Добавить отзыв</button>
+            </section>
+          </section>
+
+          <section class="tab-pane" data-tab-content="contacts">
+            <section class="admin-card">
+              <h2>Контакты и SEO</h2>
+              <label>Title <input name="metaTitle" /></label>
+              <label>Description <textarea rows="2" name="metaDescription"></textarea></label>
+              <label>Регион <input name="region" /></label>
+              <label>Телефон (как показывать) <input name="phoneDisplay" /></label>
+              <label>Телефон (только цифры) <input name="phoneRaw" /></label>
+              <label>Email <input name="email" /></label>
+              <label>Режим работы <input name="workSchedule" /></label>
+            </section>
+
+            <section class="admin-card">
+              <h2>Футер и реквизиты</h2>
+              <label>Слоган <input name="slogan" /></label>
+              <label>ИНН <input name="inn" /></label>
+              <label>ОГРНИП <input name="ogrnip" /></label>
+            </section>
+          </section>
+
+          <div class="admin-actions">
+            <button class="btn btn-primary" type="submit">Сохранить изменения</button>
+            <button class="btn btn-outline" id="reset-btn" type="button">Сбросить к шаблону</button>
+            <span class="hint" id="save-status"></span>
+          </div>
+        </form>
+      </div>
+    </main>
+
+    <script src="admin.js"></script>
+  </body>
+</html>
