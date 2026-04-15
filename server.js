@@ -38,10 +38,13 @@ const upload = multer({
   storage,
   limits: { fileSize: maxUploadBytes },
   fileFilter: (_req, file, cb) => {
-    const allowed = file.mimetype.startsWith('image/');
+    const allowed =
+      file.mimetype.startsWith('image/') ||
+      file.mimetype.startsWith('video/') ||
+      file.mimetype === 'application/pdf';
 
     if (!allowed) {
-      cb(new Error('Разрешены только фото.'));
+      cb(new Error('Разрешены только фото, видео или PDF.'));
       return;
     }
 
@@ -187,11 +190,11 @@ async function sendTelegramNotification({ name, phone, comment, service, files }
     `Телефон: <a href="tel:${escapeHtml(phone)}">${escapeHtml(phone)}</a>`,
     `Комментарий: ${escapeHtml(comment)}`,
     service ? `Услуга: ${escapeHtml(service)}` : null,
-    Array.isArray(files) && files.length ? `Фото: ${files.length} шт.` : null,
+    Array.isArray(files) && files.length ? `Файлы: ${files.length} шт.` : null,
     ...(Array.isArray(files)
       ? files.map(
           (item, index) =>
-            `Фото ${index + 1}: <a href="${escapeHtml(item.url)}">${escapeHtml(item.name || 'Открыть файл')}</a>`
+            `Файл ${index + 1}: <a href="${escapeHtml(item.url)}">${escapeHtml(item.name || 'Открыть файл')}</a>`
         )
       : []),
   ].filter(Boolean);
@@ -329,14 +332,14 @@ app.post('/api/leads', upload.array('files', 5), async (req, res) => {
     if (!name || !rawPhone || !comment || uploadedFiles.length === 0) {
       return res.status(400).json({
         ok: false,
-        message: 'Обязательные поля: имя, телефон, комментарий и хотя бы 1 фото.',
+        message: 'Обязательные поля: имя, телефон, комментарий и хотя бы 1 файл.',
       });
     }
 
     if (uploadedFiles.length > 5) {
       return res.status(400).json({
         ok: false,
-        message: 'Можно прикрепить не более 5 фото.',
+        message: 'Можно прикрепить не более 5 файлов.',
       });
     }
 
@@ -409,7 +412,7 @@ app.post('/api/admin/upload-video', mediaUpload.single('video'), (req, res) => {
 app.use((err, _req, res, _next) => {
   if (err instanceof multer.MulterError) {
     if (err.code === 'LIMIT_UNEXPECTED_FILE') {
-      return res.status(400).json({ ok: false, message: 'Можно прикрепить не более 5 фото.' });
+      return res.status(400).json({ ok: false, message: 'Можно прикрепить не более 5 файлов.' });
     }
     return res.status(400).json({ ok: false, message: `Ошибка файла: ${err.message}` });
   }
