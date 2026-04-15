@@ -294,18 +294,43 @@ function setupRevealAnimations() {
   revealElements.forEach((element) => revealObserver.observe(element));
 }
 
-async function submitLead(formData) {
-  const response = await fetch('/api/leads', {
-    method: 'POST',
-    body: formData,
+function setupScrollToTopLinks() {
+  const links = document.querySelectorAll('a[href="#top"]');
+  links.forEach((link) => {
+    link.addEventListener('click', (event) => {
+      event.preventDefault();
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+      if (window.location.hash !== '#top') {
+        window.history.replaceState(null, '', '#top');
+      }
+    });
   });
+}
 
-  const payload = await response.json();
-  if (!response.ok) {
-    throw new Error(payload.message || 'Не удалось отправить заявку.');
-  }
+async function submitLead(formData, onProgress) {
+  return new Promise((resolve, reject) => {
+    const xhr = new XMLHttpRequest();
+    xhr.open('POST', '/api/leads');
+    xhr.responseType = 'json';
 
-  return payload;
+    xhr.upload.onprogress = (event) => {
+      if (!onProgress || !event.lengthComputable) return;
+      const percent = Math.max(1, Math.round((event.loaded / event.total) * 100));
+      onProgress(percent);
+    };
+
+    xhr.onload = () => {
+      const payload = xhr.response || {};
+      if (xhr.status >= 200 && xhr.status < 300) {
+        resolve(payload);
+        return;
+      }
+      reject(new Error(payload.message || 'Не удалось отправить заявку.'));
+    };
+
+    xhr.onerror = () => reject(new Error('Ошибка сети при отправке заявки.'));
+    xhr.send(formData);
+  });
 }
 
 function sanitizeNameInput(value) {
@@ -350,6 +375,90 @@ function isValidComment(value) {
   return /^[0-9A-Za-zА-Яа-яЁё\s.,!?():\-"]{1,500}$/.test(value);
 }
 
+function getOrCreateFieldError(form, fieldName) {
+  let el = form.querySelector(`[data-error-for="${fieldName}"]`);
+  if (el) return el;
+
+  const field =
+    form.querySelector(`[name="${fieldName}"]`) ||
+    form.querySelector(`#${fieldName}`) ||
+    null;
+  if (!field) return null;
+
+  el = document.createElement('small');
+  el.className = 'field-error';
+  el.dataset.errorFor = fieldName;
+  field.insertAdjacentElement('afterend', el);
+  return el;
+}
+
+function setFieldError(form, fieldName, message) {
+  const field =
+    form.querySelector(`[name="${fieldName}"]`) ||
+    form.querySelector(`#${fieldName}`) ||
+    null;
+  const error = getOrCreateFieldError(form, fieldName);
+  if (field) field.classList.add('field-invalid');
+  if (error) error.textContent = message || '';
+}
+
+function clearFieldError(form, fieldName) {
+  const field =
+    form.querySelector(`[name="${fieldName}"]`) ||
+    form.querySelector(`#${fieldName}`) ||
+    null;
+  const error = getOrCreateFieldError(form, fieldName);
+  if (field) field.classList.remove('field-invalid');
+  if (error) error.textContent = '';
+}
+
+function clearAllFieldErrors(form) {
+  ['name', 'phone', 'comment', 'files'].forEach((field) => clearFieldError(form, field));
+}
+
+function renderFilePreview(previewContainer, files) {
+  if (!previewContainer) return;
+  previewContainer.innerHTML = '';
+
+  files.forEach((file) => {
+    const item = document.createElement('div');
+    item.className = 'file-preview-item';
+
+    const isImage = String(file.type || '').startsWith('image/');
+    if (isImage) {
+      const img = document.createElement('img');
+      img.alt = file.name;
+      img.loading = 'lazy';
+      img.src = URL.createObjectURL(file);
+      img.addEventListener('load', () => URL.revokeObjectURL(img.src));
+      item.appendChild(img);
+    } else {
+      const icon = document.createElement('div');
+      icon.className = 'file-preview-icon';
+      icon.textContent = file.type === 'application/pdf' ? 'PDF' : 'VIDEO';
+      item.appendChild(icon);
+    }
+
+    const meta = document.createElement('p');
+    meta.className = 'file-preview-name';
+    meta.textContent = file.name;
+    item.appendChild(meta);
+    previewContainer.appendChild(item);
+  });
+}
+
+function setupFloatingCta(form) {
+  if (!form || document.querySelector('.floating-cta')) return;
+  const btn = document.createElement('button');
+  btn.type = 'button';
+  btn.className = 'floating-cta';
+  btn.textContent = 'Оставить заявку';
+  btn.addEventListener('click', () => {
+    form.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  });
+  document.body.appendChild(btn);
+}
+
 function setupLeadForm() {
   const form = document.getElementById('lead-form');
   const note = document.getElementById('form-note');
@@ -362,28 +471,63 @@ function setupLeadForm() {
   const nameInput = form.querySelector('input[name="name"]');
   const phoneInput = form.querySelector('input[name="phone"]');
   const commentInput = form.querySelector('textarea[name="comment"]');
+  const fileInput = form.querySelector('input[name="files"]');
+
+  let filePreview = null;
+  if (fileInput) {
+    filePreview = document.createElement('div');
+    filePreview.className = 'file-preview-grid full-width';
+    fileInput.closest('label')?.insertAdjacentElement('afterend', filePreview);
+  }
+
+  let commentCounter = null;
+  if (commentInput) {
+    commentCounter = document.createElement('small');
+    commentCounter.className = 'field-helper';
+    commentInput.insertAdjacentElement('afterend', commentCounter);
+  }
+
+  setupFloatingCta(form);
 
   if (nameInput) {
     nameInput.addEventListener('input', () => {
       nameInput.value = sanitizeNameInput(nameInput.value).replace(/\s{2,}/g, ' ');
+      clearFieldError(form, 'name');
     });
   }
 
   if (phoneInput) {
     phoneInput.addEventListener('input', () => {
       phoneInput.value = formatPhoneInput(phoneInput.value);
+      clearFieldError(form, 'phone');
     });
     phoneInput.value = formatPhoneInput(phoneInput.value || '');
   }
 
   if (commentInput) {
+    const updateCounter = () => {
+      const left = Math.max(0, 500 - String(commentInput.value || '').length);
+      if (commentCounter) commentCounter.textContent = `Осталось символов: ${left}`;
+    };
     commentInput.addEventListener('input', () => {
       commentInput.value = sanitizeCommentInput(commentInput.value);
+      clearFieldError(form, 'comment');
+      updateCounter();
+    });
+    updateCounter();
+  }
+
+  if (fileInput) {
+    fileInput.addEventListener('change', () => {
+      const files = Array.from(fileInput.files || []).slice(0, 5);
+      renderFilePreview(filePreview, files);
+      clearFieldError(form, 'files');
     });
   }
 
   form.addEventListener('submit', async (event) => {
     event.preventDefault();
+    clearAllFieldErrors(form);
 
     const formData = new FormData(form);
     const name = sanitizeNameInput(String(formData.get('name') || '').trim()).replace(/\s{2,}/g, ' ');
@@ -393,31 +537,36 @@ function setupLeadForm() {
     const files = formData.getAll('files').filter((item) => item instanceof File && item.size > 0);
 
     if (!isValidName(name)) {
-      note.textContent = 'Имя: только буквы, пробел и дефис (2-60 символов).';
+      setFieldError(form, 'name', 'Имя: только буквы, пробел и дефис (2-60 символов).');
+      note.textContent = 'Проверьте поля формы.';
       note.style.color = '#b32c2c';
       return;
     }
 
     if (!phone) {
-      note.textContent = 'Телефон должен быть в формате +7XXXXXXXXXX.';
+      setFieldError(form, 'phone', 'Телефон должен быть в формате +7XXXXXXXXXX.');
+      note.textContent = 'Проверьте поля формы.';
       note.style.color = '#b32c2c';
       return;
     }
 
     if (!isValidComment(comment)) {
-      note.textContent = 'Комментарий: до 500 символов, без спецсимволов.';
+      setFieldError(form, 'comment', 'Комментарий: до 500 символов, без спецсимволов.');
+      note.textContent = 'Проверьте поля формы.';
       note.style.color = '#b32c2c';
       return;
     }
 
     if (files.length === 0) {
-      note.textContent = 'Пожалуйста, прикрепите хотя бы 1 файл.';
+      setFieldError(form, 'files', 'Пожалуйста, прикрепите хотя бы 1 файл.');
+      note.textContent = 'Проверьте поля формы.';
       note.style.color = '#b32c2c';
       return;
     }
 
     if (files.length > 5) {
-      note.textContent = 'Можно прикрепить не более 5 файлов.';
+      setFieldError(form, 'files', 'Можно прикрепить не более 5 файлов.');
+      note.textContent = 'Проверьте поля формы.';
       note.style.color = '#b32c2c';
       return;
     }
@@ -431,7 +580,8 @@ function setupLeadForm() {
       );
     });
     if (hasInvalidType) {
-      note.textContent = 'Разрешены только фото, видео и PDF.';
+      setFieldError(form, 'files', 'Разрешены только фото, видео и PDF.');
+      note.textContent = 'Проверьте поля формы.';
       note.style.color = '#b32c2c';
       return;
     }
@@ -443,7 +593,7 @@ function setupLeadForm() {
     const submitButton = form.querySelector('button[type="submit"]');
     if (submitButton) submitButton.disabled = true;
 
-    note.textContent = 'Отправляем заявку...';
+    note.textContent = 'Отправляем заявку... 0%';
     note.style.color = '#264f72';
 
     if (isGithubPages) {
@@ -455,10 +605,13 @@ function setupLeadForm() {
     }
 
     try {
-      await submitLead(formData);
-      note.textContent = 'Спасибо. Заявка успешно отправлена.';
+      await submitLead(formData, (percent) => {
+        note.textContent = `Отправляем заявку... ${percent}%`;
+      });
+      note.textContent = 'Спасибо. Заявка успешно отправлена. Обычно связываемся в течение 10-15 минут.';
       note.style.color = '#1c6e2d';
       form.reset();
+      if (filePreview) filePreview.innerHTML = '';
     } catch (error) {
       note.textContent = error.message;
       note.style.color = '#b32c2c';
@@ -470,4 +623,5 @@ function setupLeadForm() {
 
 applyConfig();
 setupRevealAnimations();
+setupScrollToTopLinks();
 setupLeadForm();
