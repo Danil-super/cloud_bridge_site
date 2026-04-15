@@ -390,7 +390,7 @@ function setupLeadForm() {
     const phoneRaw = String(formData.get('phone') || '').trim();
     const phone = normalizePhoneForSubmit(phoneRaw);
     const comment = sanitizeCommentInput(String(formData.get('comment') || '').trim()).replace(/\s{2,}/g, ' ');
-    const file = formData.get('file');
+    const files = formData.getAll('files').filter((item) => item instanceof File && item.size > 0);
 
     if (!isValidName(name)) {
       note.textContent = 'Имя: только буквы, пробел и дефис (2-60 символов).';
@@ -410,8 +410,21 @@ function setupLeadForm() {
       return;
     }
 
-    if (!(file instanceof File) || file.size === 0) {
-      note.textContent = 'Пожалуйста, заполните имя, телефон, комментарий и прикрепите файл.';
+    if (files.length === 0) {
+      note.textContent = 'Пожалуйста, прикрепите хотя бы 1 фото.';
+      note.style.color = '#b32c2c';
+      return;
+    }
+
+    if (files.length > 5) {
+      note.textContent = 'Можно прикрепить не более 5 фото.';
+      note.style.color = '#b32c2c';
+      return;
+    }
+
+    const hasInvalidType = files.some((file) => !String(file.type || '').startsWith('image/'));
+    if (hasInvalidType) {
+      note.textContent = 'Разрешены только изображения.';
       note.style.color = '#b32c2c';
       return;
     }

@@ -3,6 +3,7 @@ import multer from 'multer';
 import path from 'node:path';
 import fs from 'node:fs';
 import https from 'node:https';
+import os from 'node:os';
 import { fileURLToPath } from 'node:url';
 import dotenv from 'dotenv';
 
@@ -37,13 +38,10 @@ const upload = multer({
   storage,
   limits: { fileSize: maxUploadBytes },
   fileFilter: (_req, file, cb) => {
-    const allowed =
-      file.mimetype.startsWith('image/') ||
-      file.mimetype.startsWith('video/') ||
-      file.mimetype === 'application/pdf';
+    const allowed = file.mimetype.startsWith('image/');
 
     if (!allowed) {
-      cb(new Error('Разрешены только фото, видео или PDF.'));
+      cb(new Error('Разрешены только фото.'));
       return;
     }
 
@@ -105,6 +103,40 @@ function escapeHtml(value) {
     .replace(/'/g, '&#39;');
 }
 
+function getLanIPv4() {
+  const interfaces = os.networkInterfaces();
+  for (const values of Object.values(interfaces)) {
+    for (const info of values || []) {
+      if (info && info.family === 'IPv4' && !info.internal) {
+        return info.address;
+      }
+    }
+  }
+  return null;
+}
+
+function buildPublicBaseUrl(req) {
+  const configured = String(process.env.PUBLIC_BASE_URL || '').trim();
+  if (configured) {
+    return configured.replace(/\/+$/, '');
+  }
+
+  const host = String(req.get('host') || '');
+  const protocol = req.protocol || 'http';
+  const localHosts = ['localhost', '127.0.0.1', '::1'];
+  const hostName = host.split(':')[0];
+
+  if (localHosts.includes(hostName)) {
+    const lanIp = getLanIPv4();
+    if (lanIp) {
+      const port = host.includes(':') ? host.split(':')[1] : '';
+      return `${protocol}://${lanIp}${port ? `:${port}` : ''}`;
+    }
+  }
+
+  return `${protocol}://${host}`;
+}
+
 function postJsonHttps(hostname, endpointPath, payload) {
   return new Promise((resolve, reject) => {
     const data = JSON.stringify(payload);
@@ -140,7 +172,7 @@ function postJsonHttps(hostname, endpointPath, payload) {
   });
 }
 
-async function sendTelegramNotification({ name, phone, comment, service, fileUrl, fileName }) {
+async function sendTelegramNotification({ name, phone, comment, service, files }) {
   const token = process.env.TELEGRAM_BOT_TOKEN;
   const chatId = process.env.TELEGRAM_CHAT_ID;
 
@@ -155,8 +187,13 @@ async function sendTelegramNotification({ name, phone, comment, service, fileUrl
     `Телефон: <a href="tel:${escapeHtml(phone)}">${escapeHtml(phone)}</a>`,
     `Комментарий: ${escapeHtml(comment)}`,
     service ? `Услуга: ${escapeHtml(service)}` : null,
-    fileName ? `Файл: ${escapeHtml(fileName)}` : null,
-    fileUrl ? `Ссылка на файл: <a href="${escapeHtml(fileUrl)}">Открыть файл</a>` : null,
+    Array.isArray(files) && files.length ? `Фото: ${files.length} шт.` : null,
+    ...(Array.isArray(files)
+      ? files.map(
+          (item, index) =>
+            `Фото ${index + 1}: <a href="${escapeHtml(item.url)}">${escapeHtml(item.name || 'Открыть файл')}</a>`
+        )
+      : []),
   ].filter(Boolean);
 
   let lastError = null;
@@ -279,7 +316,7 @@ async function createAmoLead({ name, phone, comment, service }) {
   return { created: true, leadId, contactId };
 }
 
-app.post('/api/leads', upload.single('file'), async (req, res) => {
+app.post('/api/leads', upload.array('files', 5), async (req, res) => {
   try {
     const name = String(req.body.name || '').trim().replace(/\s{2,}/g, ' ');
     const rawPhone = String(req.body.phone || '').trim();
@@ -287,10 +324,19 @@ app.post('/api/leads', upload.single('file'), async (req, res) => {
     const comment = String(req.body.comment || '').trim().replace(/\s{2,}/g, ' ');
     const service = String(req.body.service || '').trim().slice(0, 120);
 
-    if (!name || !rawPhone || !comment || !req.file) {
+    const uploadedFiles = Array.isArray(req.files) ? req.files : [];
+
+    if (!name || !rawPhone || !comment || uploadedFiles.length === 0) {
       return res.status(400).json({
         ok: false,
-        message: 'Обязательные поля: имя, телефон, комментарий и файл.',
+        message: 'Обязательные поля: имя, телефон, комментарий и хотя бы 1 фото.',
+      });
+    }
+
+    if (uploadedFiles.length > 5) {
+      return res.status(400).json({
+        ok: false,
+        message: 'Можно прикрепить не более 5 фото.',
       });
     }
 
@@ -315,7 +361,10 @@ app.post('/api/leads', upload.single('file'), async (req, res) => {
       });
     }
 
-    const fileUrl = `${req.protocol}://${req.get('host')}/uploads/${req.file.filename}`;
+    const files = uploadedFiles.map((file) => ({
+      name: file.originalname,
+      url: `${buildPublicBaseUrl(req)}/uploads/${file.filename}`,
+    }));
 
     const [telegramResult, amocrmResult] = await Promise.all([
       sendTelegramNotification({
@@ -323,8 +372,7 @@ app.post('/api/leads', upload.single('file'), async (req, res) => {
         phone,
         comment,
         service,
-        fileUrl,
-        fileName: req.file.originalname,
+        files,
       }).catch((error) => ({ sent: false, reason: error.message })),
       createAmoLead({ name, phone, comment, service }).catch((error) => ({ created: false, reason: error.message })),
     ]);
@@ -360,6 +408,9 @@ app.post('/api/admin/upload-video', mediaUpload.single('video'), (req, res) => {
 
 app.use((err, _req, res, _next) => {
   if (err instanceof multer.MulterError) {
+    if (err.code === 'LIMIT_UNEXPECTED_FILE') {
+      return res.status(400).json({ ok: false, message: 'Можно прикрепить не более 5 фото.' });
+    }
     return res.status(400).json({ ok: false, message: `Ошибка файла: ${err.message}` });
   }
 
