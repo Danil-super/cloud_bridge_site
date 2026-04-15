@@ -1,0 +1,5 @@
+User-agent: *
+Allow: /
+Disallow: /admin.html
+
+Sitemap: https://danil-super.github.io/cloud_bridge_site/sitemap.xml
