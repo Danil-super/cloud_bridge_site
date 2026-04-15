@@ -1,0 +1,86 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Вход в админ-панель</title>
+    <link rel="stylesheet" href="styles.css" />
+    <style>
+      body { background: #edf6ff; min-height: 100vh; }
+      .login-wrap { min-height: 100vh; display: grid; place-items: center; padding: 1rem; }
+      .login-card {
+        width: min(460px, 100%);
+        background: #fff;
+        border: 1px solid #d7e9f8;
+        border-radius: 18px;
+        padding: 1.2rem;
+        box-shadow: 0 10px 30px rgba(9, 24, 40, 0.08);
+      }
+      .login-card h1 { margin: 0 0 0.8rem; font-size: 1.35rem; }
+      .login-card p { color: #4a5f76; margin: 0 0 1rem; }
+      .login-form { display: grid; gap: 0.8rem; }
+      .login-form label { display: grid; gap: 0.35rem; font-weight: 700; color: #223f5f; }
+      .login-form input {
+        border: 1px solid #bfdcf4;
+        border-radius: 10px;
+        padding: 0.72rem;
+        font: inherit;
+      }
+      .login-actions { display: flex; gap: 0.6rem; align-items: center; }
+      .note { color: #4a5f76; font-size: 0.9rem; margin: 0; }
+    </style>
+  </head>
+  <body>
+    <main class="login-wrap">
+      <section class="login-card">
+        <h1>Вход в админ-панель</h1>
+        <p>Введите пароль администратора, чтобы открыть страницу редактирования сайта.</p>
+        <form id="login-form" class="login-form" novalidate>
+          <label>
+            Пароль
+            <input id="password" name="password" type="password" autocomplete="current-password" required />
+          </label>
+          <div class="login-actions">
+            <button class="btn btn-primary" type="submit">Войти</button>
+            <a class="btn btn-outline" href="index.html">На сайт</a>
+          </div>
+          <p id="note" class="note"></p>
+        </form>
+      </section>
+    </main>
+
+    <script>
+      const form = document.getElementById('login-form');
+      const note = document.getElementById('note');
+
+      form.addEventListener('submit', async (event) => {
+        event.preventDefault();
+        const password = String(new FormData(form).get('password') || '');
+        if (!password) {
+          note.textContent = 'Введите пароль.';
+          note.style.color = '#b32c2c';
+          return;
+        }
+
+        note.textContent = 'Проверяем...';
+        note.style.color = '#264f72';
+
+        try {
+          const response = await fetch('/api/admin/login', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ password }),
+          });
+          const payload = await response.json();
+          if (!response.ok) {
+            throw new Error(payload.message || 'Ошибка авторизации.');
+          }
+          window.location.href = '/admin.html';
+        } catch (error) {
+          note.textContent = error.message;
+          note.style.color = '#b32c2c';
+        }
+      });
+    </script>
+  </body>
+</html>

@@ -16,6 +16,9 @@ const app = express();
 const port = Number(process.env.PORT || 4173);
 const maxUploadBytes = Number(process.env.MAX_UPLOAD_MB || 20) * 1024 * 1024;
 const maxVideoUploadBytes = Number(process.env.MAX_VIDEO_UPLOAD_MB || 200) * 1024 * 1024;
+const adminPassword = String(process.env.ADMIN_PASSWORD || '').trim();
+const adminSessionCookieName = 'admin_session';
+const adminSessionCookieValue = 'ok';
 const uploadDir = path.join(__dirname, 'uploads');
 const mediaDir = path.join(__dirname, 'assets', 'media');
 
@@ -78,8 +81,8 @@ const mediaUpload = multer({
 });
 
 app.use(express.json());
+app.use(express.urlencoded({ extended: false }));
 app.use('/uploads', express.static(uploadDir));
-app.use(express.static(__dirname));
 
 function normalizePhone(input) {
   let digits = String(input || '').replace(/\D/g, '');
@@ -138,6 +141,37 @@ function buildPublicBaseUrl(req) {
   }
 
   return `${protocol}://${host}`;
+}
+
+function parseCookies(req) {
+  const header = String(req.headers.cookie || '');
+  const cookies = {};
+  header.split(';').forEach((part) => {
+    const [rawKey, ...rest] = part.trim().split('=');
+    if (!rawKey) return;
+    cookies[rawKey] = decodeURIComponent(rest.join('=') || '');
+  });
+  return cookies;
+}
+
+function isAdminAuthorized(req) {
+  const cookies = parseCookies(req);
+  return cookies[adminSessionCookieName] === adminSessionCookieValue;
+}
+
+function requireAdmin(req, res, next) {
+  if (isAdminAuthorized(req)) {
+    next();
+    return;
+  }
+
+  const acceptsHtml = String(req.headers.accept || '').includes('text/html');
+  if (acceptsHtml) {
+    res.redirect('/admin-login.html');
+    return;
+  }
+
+  res.status(401).json({ ok: false, message: 'Требуется авторизация администратора.' });
 }
 
 function postJsonHttps(hostname, endpointPath, payload) {
@@ -319,6 +353,48 @@ async function createAmoLead({ name, phone, comment, service }) {
   return { created: true, leadId, contactId };
 }
 
+app.get('/admin-login.html', (_req, res) => {
+  res.sendFile(path.join(__dirname, 'admin-login.html'));
+});
+
+app.post('/api/admin/login', (req, res) => {
+  if (!adminPassword) {
+    return res.status(500).json({
+      ok: false,
+      message: 'Пароль админ-панели не задан на сервере.',
+    });
+  }
+
+  const password = String(req.body.password || '');
+  if (password !== adminPassword) {
+    return res.status(401).json({ ok: false, message: 'Неверный пароль.' });
+  }
+
+  res.setHeader(
+    'Set-Cookie',
+    `${adminSessionCookieName}=${adminSessionCookieValue}; Path=/; HttpOnly; SameSite=Lax; Max-Age=86400`
+  );
+  return res.json({ ok: true });
+});
+
+app.post('/api/admin/logout', (_req, res) => {
+  res.setHeader(
+    'Set-Cookie',
+    `${adminSessionCookieName}=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0`
+  );
+  return res.json({ ok: true });
+});
+
+app.get('/admin', (_req, res) => {
+  res.redirect('/admin.html');
+});
+
+app.get('/admin.html', requireAdmin, (_req, res) => {
+  res.sendFile(path.join(__dirname, 'admin.html'));
+});
+
+app.use(express.static(__dirname));
+
 app.post('/api/leads', upload.array('files', 5), async (req, res) => {
   try {
     const name = String(req.body.name || '').trim().replace(/\s{2,}/g, ' ');
@@ -396,7 +472,7 @@ app.post('/api/leads', upload.array('files', 5), async (req, res) => {
   }
 });
 
-app.post('/api/admin/upload-video', mediaUpload.single('video'), (req, res) => {
+app.post('/api/admin/upload-video', requireAdmin, mediaUpload.single('video'), (req, res) => {
   if (!req.file) {
     return res.status(400).json({ ok: false, message: 'Видео не загружено.' });
   }
