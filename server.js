@@ -2,6 +2,7 @@ import express from 'express';
 import multer from 'multer';
 import path from 'node:path';
 import fs from 'node:fs';
+import https from 'node:https';
 import { fileURLToPath } from 'node:url';
 import dotenv from 'dotenv';
 
@@ -83,6 +84,41 @@ function normalizePhone(input) {
   return String(input || '').replace(/[^\d+]/g, '').trim();
 }
 
+function postJsonHttps(hostname, endpointPath, payload) {
+  return new Promise((resolve, reject) => {
+    const data = JSON.stringify(payload);
+    const req = https.request(
+      {
+        hostname,
+        path: endpointPath,
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Content-Length': Buffer.byteLength(data),
+        },
+      },
+      (res) => {
+        let raw = '';
+        res.on('data', (chunk) => {
+          raw += chunk;
+        });
+        res.on('end', () => {
+          const status = Number(res.statusCode || 0);
+          if (status < 200 || status >= 300) {
+            reject(new Error(`HTTP ${status}: ${raw}`));
+            return;
+          }
+          resolve(raw);
+        });
+      }
+    );
+
+    req.on('error', reject);
+    req.write(data);
+    req.end();
+  });
+}
+
 async function sendTelegramNotification({ name, phone, comment, service, fileUrl, fileName }) {
   const token = process.env.TELEGRAM_BOT_TOKEN;
   const chatId = process.env.TELEGRAM_CHAT_ID;
@@ -102,21 +138,27 @@ async function sendTelegramNotification({ name, phone, comment, service, fileUrl
     fileUrl ? `Ссылка на файл: ${fileUrl}` : null,
   ].filter(Boolean);
 
-  const response = await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      chat_id: chatId,
-      text: lines.join('\n'),
-    }),
-  });
-
-  if (!response.ok) {
-    const body = await response.text();
-    throw new Error(`Telegram API error: ${response.status} ${body}`);
+  let lastError = null;
+  for (let attempt = 1; attempt <= 4; attempt += 1) {
+    try {
+      const raw = await postJsonHttps('api.telegram.org', `/bot${token}/sendMessage`, {
+        chat_id: chatId,
+        text: lines.join('\n'),
+      });
+      const parsed = JSON.parse(raw || '{}');
+      if (!parsed.ok) {
+        throw new Error(`Telegram API error: ${raw}`);
+      }
+      return { sent: true };
+    } catch (error) {
+      lastError = error;
+      if (attempt < 4) {
+        await new Promise((resolve) => setTimeout(resolve, 700 * attempt));
+      }
+    }
   }
 
-  return { sent: true };
+  throw lastError || new Error('Telegram send failed');
 }
 
 async function createAmoLead({ name, phone, comment, service }) {
