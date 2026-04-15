@@ -139,11 +139,26 @@
         <form class="lead-form" id="lead-form" novalidate enctype="multipart/form-data">
           <label>
             Имя *
-            <input type="text" name="name" autocomplete="name" required />
+            <input
+              type="text"
+              name="name"
+              autocomplete="name"
+              maxlength="60"
+              inputmode="text"
+              required
+            />
           </label>
           <label>
             Телефон *
-            <input type="tel" name="phone" autocomplete="tel" required />
+            <input
+              type="tel"
+              name="phone"
+              autocomplete="tel"
+              inputmode="tel"
+              placeholder="+7 (___) ___-__-__"
+              maxlength="18"
+              required
+            />
           </label>
           <label>
             Услуга
@@ -151,7 +166,13 @@
           </label>
           <label class="full-width">
             Комментарий *
-            <textarea name="comment" rows="4" placeholder="Опишите задачу" required></textarea>
+            <textarea
+              name="comment"
+              rows="4"
+              placeholder="Опишите задачу"
+              maxlength="500"
+              required
+            ></textarea>
           </label>
           <label class="full-width">
             Файл * (фото/видео/PDF)

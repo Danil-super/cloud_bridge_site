@@ -81,7 +81,28 @@ app.use('/uploads', express.static(uploadDir));
 app.use(express.static(__dirname));
 
 function normalizePhone(input) {
-  return String(input || '').replace(/[^\d+]/g, '').trim();
+  let digits = String(input || '').replace(/\D/g, '');
+  if (digits.startsWith('8')) digits = `7${digits.slice(1)}`;
+  if (!digits.startsWith('7')) digits = `7${digits}`;
+  if (!/^7\d{10}$/.test(digits)) return '';
+  return `+${digits}`;
+}
+
+function isValidName(value) {
+  return /^[A-Za-zА-Яа-яЁё\s-]{2,60}$/.test(String(value || ''));
+}
+
+function isValidComment(value) {
+  return /^[0-9A-Za-zА-Яа-яЁё\s.,!?():\-"]{1,500}$/.test(String(value || ''));
+}
+
+function escapeHtml(value) {
+  return String(value || '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
 }
 
 function postJsonHttps(hostname, endpointPath, payload) {
@@ -128,14 +149,14 @@ async function sendTelegramNotification({ name, phone, comment, service, fileUrl
   }
 
   const lines = [
-    'Новая заявка с сайта',
+    '<b>Новая заявка с сайта</b>',
     '',
-    `Имя: ${name}`,
-    `Телефон: ${phone}`,
-    `Комментарий: ${comment}`,
-    service ? `Услуга: ${service}` : null,
-    fileName ? `Файл: ${fileName}` : null,
-    fileUrl ? `Ссылка на файл: ${fileUrl}` : null,
+    `Имя: ${escapeHtml(name)}`,
+    `Телефон: <a href="tel:${escapeHtml(phone)}">${escapeHtml(phone)}</a>`,
+    `Комментарий: ${escapeHtml(comment)}`,
+    service ? `Услуга: ${escapeHtml(service)}` : null,
+    fileName ? `Файл: ${escapeHtml(fileName)}` : null,
+    fileUrl ? `Ссылка на файл: <a href="${escapeHtml(fileUrl)}">Открыть файл</a>` : null,
   ].filter(Boolean);
 
   let lastError = null;
@@ -144,6 +165,8 @@ async function sendTelegramNotification({ name, phone, comment, service, fileUrl
       const raw = await postJsonHttps('api.telegram.org', `/bot${token}/sendMessage`, {
         chat_id: chatId,
         text: lines.join('\n'),
+        parse_mode: 'HTML',
+        disable_web_page_preview: true,
       });
       const parsed = JSON.parse(raw || '{}');
       if (!parsed.ok) {
@@ -258,15 +281,37 @@ async function createAmoLead({ name, phone, comment, service }) {
 
 app.post('/api/leads', upload.single('file'), async (req, res) => {
   try {
-    const name = String(req.body.name || '').trim();
-    const phone = normalizePhone(req.body.phone);
-    const comment = String(req.body.comment || '').trim();
-    const service = String(req.body.service || '').trim();
+    const name = String(req.body.name || '').trim().replace(/\s{2,}/g, ' ');
+    const rawPhone = String(req.body.phone || '').trim();
+    const phone = normalizePhone(rawPhone);
+    const comment = String(req.body.comment || '').trim().replace(/\s{2,}/g, ' ');
+    const service = String(req.body.service || '').trim().slice(0, 120);
 
-    if (!name || !phone || !comment || !req.file) {
+    if (!name || !rawPhone || !comment || !req.file) {
       return res.status(400).json({
         ok: false,
         message: 'Обязательные поля: имя, телефон, комментарий и файл.',
+      });
+    }
+
+    if (!isValidName(name)) {
+      return res.status(400).json({
+        ok: false,
+        message: 'Имя должно содержать только буквы, пробел и дефис (2-60 символов).',
+      });
+    }
+
+    if (!phone) {
+      return res.status(400).json({
+        ok: false,
+        message: 'Телефон должен быть в формате +7XXXXXXXXXX.',
+      });
+    }
+
+    if (!isValidComment(comment)) {
+      return res.status(400).json({
+        ok: false,
+        message: 'Комментарий: до 500 символов и без спецсимволов.',
       });
     }
 

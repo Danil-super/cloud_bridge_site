@@ -308,6 +308,48 @@ async function submitLead(formData) {
   return payload;
 }
 
+function sanitizeNameInput(value) {
+  return String(value || '').replace(/[^A-Za-zА-Яа-яЁё\s-]/g, '');
+}
+
+function isValidName(value) {
+  return /^[A-Za-zА-Яа-яЁё\s-]{2,60}$/.test(value);
+}
+
+function formatPhoneInput(value) {
+  let digits = String(value || '').replace(/\D/g, '');
+  if (digits.startsWith('8')) digits = `7${digits.slice(1)}`;
+  if (!digits.startsWith('7')) digits = `7${digits}`;
+  digits = digits.slice(0, 11);
+
+  const p = digits.slice(1);
+  let out = '+7';
+  if (p.length > 0) out += ` (${p.slice(0, 3)}`;
+  if (p.length >= 3) out += ')';
+  if (p.length > 3) out += ` ${p.slice(3, 6)}`;
+  if (p.length > 6) out += `-${p.slice(6, 8)}`;
+  if (p.length > 8) out += `-${p.slice(8, 10)}`;
+  return out;
+}
+
+function normalizePhoneForSubmit(value) {
+  let digits = String(value || '').replace(/\D/g, '');
+  if (digits.startsWith('8')) digits = `7${digits.slice(1)}`;
+  if (!digits.startsWith('7')) digits = `7${digits}`;
+  if (!/^7\d{10}$/.test(digits)) return null;
+  return `+${digits}`;
+}
+
+function sanitizeCommentInput(value) {
+  return String(value || '')
+    .slice(0, 500)
+    .replace(/[^0-9A-Za-zА-Яа-яЁё\s.,!?():\-"]/g, '');
+}
+
+function isValidComment(value) {
+  return /^[0-9A-Za-zА-Яа-яЁё\s.,!?():\-"]{1,500}$/.test(value);
+}
+
 function setupLeadForm() {
   const form = document.getElementById('lead-form');
   const note = document.getElementById('form-note');
@@ -317,20 +359,66 @@ function setupLeadForm() {
   const isGithubPages =
     typeof window !== 'undefined' && window.location.hostname.endsWith('github.io');
 
+  const nameInput = form.querySelector('input[name="name"]');
+  const phoneInput = form.querySelector('input[name="phone"]');
+  const commentInput = form.querySelector('textarea[name="comment"]');
+
+  if (nameInput) {
+    nameInput.addEventListener('input', () => {
+      nameInput.value = sanitizeNameInput(nameInput.value).replace(/\s{2,}/g, ' ');
+    });
+  }
+
+  if (phoneInput) {
+    phoneInput.addEventListener('input', () => {
+      phoneInput.value = formatPhoneInput(phoneInput.value);
+    });
+    phoneInput.value = formatPhoneInput(phoneInput.value || '');
+  }
+
+  if (commentInput) {
+    commentInput.addEventListener('input', () => {
+      commentInput.value = sanitizeCommentInput(commentInput.value);
+    });
+  }
+
   form.addEventListener('submit', async (event) => {
     event.preventDefault();
 
     const formData = new FormData(form);
-    const name = String(formData.get('name') || '').trim();
-    const phone = String(formData.get('phone') || '').trim();
-    const comment = String(formData.get('comment') || '').trim();
+    const name = sanitizeNameInput(String(formData.get('name') || '').trim()).replace(/\s{2,}/g, ' ');
+    const phoneRaw = String(formData.get('phone') || '').trim();
+    const phone = normalizePhoneForSubmit(phoneRaw);
+    const comment = sanitizeCommentInput(String(formData.get('comment') || '').trim()).replace(/\s{2,}/g, ' ');
     const file = formData.get('file');
 
-    if (!name || !phone || !comment || !(file instanceof File) || file.size === 0) {
+    if (!isValidName(name)) {
+      note.textContent = 'Имя: только буквы, пробел и дефис (2-60 символов).';
+      note.style.color = '#b32c2c';
+      return;
+    }
+
+    if (!phone) {
+      note.textContent = 'Телефон должен быть в формате +7XXXXXXXXXX.';
+      note.style.color = '#b32c2c';
+      return;
+    }
+
+    if (!isValidComment(comment)) {
+      note.textContent = 'Комментарий: до 500 символов, без спецсимволов.';
+      note.style.color = '#b32c2c';
+      return;
+    }
+
+    if (!(file instanceof File) || file.size === 0) {
       note.textContent = 'Пожалуйста, заполните имя, телефон, комментарий и прикрепите файл.';
       note.style.color = '#b32c2c';
       return;
     }
+
+    formData.set('name', name);
+    formData.set('phone', phone);
+    formData.set('comment', comment);
 
     const submitButton = form.querySelector('button[type="submit"]');
     if (submitButton) submitButton.disabled = true;
