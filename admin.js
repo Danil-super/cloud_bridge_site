@@ -112,6 +112,9 @@ const defaultConfig = {
 const form = document.getElementById('admin-form');
 const saveStatus = document.getElementById('save-status');
 const resetBtn = document.getElementById('reset-btn');
+const changesIndicator = document.getElementById('changes-indicator');
+const reloadConfigBtn = document.getElementById('reload-config-btn');
+const logoutBtn = document.getElementById('logout-btn');
 
 const heroBadgesEditor = document.getElementById('hero-badges-editor');
 const advantagesEditor = document.getElementById('advantages-editor');
@@ -132,6 +135,22 @@ const videoFileInput = document.getElementById('video-file-input');
 const uploadVideoBtn = document.getElementById('upload-video-btn');
 const videoUploadStatus = document.getElementById('video-upload-status');
 const videoPreview = document.getElementById('video-preview');
+let isDirty = false;
+
+function updateDirtyState(nextValue) {
+  isDirty = Boolean(nextValue);
+
+  if (!changesIndicator) return;
+
+  if (isDirty) {
+    changesIndicator.textContent = 'Есть несохраненные изменения';
+    changesIndicator.classList.add('is-warning');
+    return;
+  }
+
+  changesIndicator.textContent = 'Все изменения сохранены';
+  changesIndicator.classList.remove('is-warning');
+}
 
 async function loadConfig() {
   try {
@@ -346,6 +365,7 @@ function fillForm(config) {
   renderPairEditor(stepsEditor, config.steps || []);
   renderPricesEditor(config.prices || []);
   renderReviewsEditor(config.reviews || []);
+  updateDirtyState(false);
 }
 
 async function saveConfig(event) {
@@ -416,6 +436,7 @@ async function saveConfig(event) {
     }
 
     saveStatus.textContent = `Сохранено на сервере: ${new Date().toLocaleTimeString('ru-RU')}`;
+    updateDirtyState(false);
   } catch (error) {
     saveStatus.textContent = error.message;
   }
@@ -437,6 +458,7 @@ async function resetConfig() {
   }
 
   saveStatus.textContent = 'Сброшено к шаблону и сохранено на сервере.';
+  updateDirtyState(false);
 }
 
 function setupTabs() {
@@ -482,11 +504,52 @@ async function uploadVideoFile() {
     form.videoSrc.value = payload.path;
     if (videoPreview) videoPreview.src = payload.path;
     if (videoUploadStatus) videoUploadStatus.textContent = `Загружено: ${payload.path}`;
+    updateDirtyState(true);
   } catch (error) {
     if (videoUploadStatus) videoUploadStatus.textContent = error.message;
   } finally {
     if (uploadVideoBtn) uploadVideoBtn.disabled = false;
   }
+}
+
+async function reloadConfigFromServer() {
+  if (isDirty && !window.confirm('Есть несохраненные изменения. Перезагрузить данные с сервера и потерять текущие правки?')) {
+    return;
+  }
+
+  if (saveStatus) saveStatus.textContent = 'Обновляем данные с сервера...';
+  const config = await loadConfig();
+  fillForm(config);
+  if (saveStatus) saveStatus.textContent = 'Данные обновлены с сервера.';
+}
+
+async function logoutAdmin() {
+  if (!window.confirm('Выйти из админ-панели на этом устройстве?')) return;
+
+  try {
+    const response = await fetch('/api/admin/logout', {
+      method: 'POST',
+      credentials: 'same-origin',
+    });
+    const payload = await response.json();
+    if (!response.ok || !payload.ok) {
+      throw new Error(payload.message || 'Не удалось выйти из админ-панели.');
+    }
+    window.location.href = '/admin-login.html';
+  } catch (error) {
+    if (saveStatus) saveStatus.textContent = error.message;
+  }
+}
+
+function setupDirtyTracking() {
+  form.addEventListener('input', () => updateDirtyState(true));
+  form.addEventListener('change', () => updateDirtyState(true));
+
+  window.addEventListener('beforeunload', (event) => {
+    if (!isDirty) return;
+    event.preventDefault();
+    event.returnValue = '';
+  });
 }
 
 if (form.videoSrc) {
@@ -527,8 +590,15 @@ resetBtn.addEventListener('click', () => {
     saveStatus.textContent = error.message;
   });
 });
+reloadConfigBtn?.addEventListener('click', () => {
+  reloadConfigFromServer().catch((error) => {
+    saveStatus.textContent = error.message;
+  });
+});
+logoutBtn?.addEventListener('click', logoutAdmin);
 uploadVideoBtn?.addEventListener('click', uploadVideoFile);
 setupTabs();
+setupDirtyTracking();
 loadConfig().then((config) => {
   fillForm(config);
 });

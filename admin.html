@@ -15,7 +15,28 @@
       .admin-form label { display: grid; gap: 0.32rem; font-weight: 700; }
       .admin-form input, .admin-form textarea { font: inherit; border: 1px solid #bfdcf4; border-radius: 10px; padding: 0.7rem; }
       .admin-actions { display: flex; flex-wrap: wrap; gap: 0.7rem; }
+      .admin-actions-between { justify-content: space-between; align-items: center; }
       .hint { color: #4a5f76; font-size: 0.9rem; }
+      .status-pill {
+        display: inline-flex;
+        align-items: center;
+        min-height: 38px;
+        padding: 0.45rem 0.8rem;
+        border-radius: 999px;
+        border: 1px solid #c7def3;
+        background: #f5fbff;
+        color: #285171;
+        font-weight: 700;
+      }
+      .status-pill.is-warning {
+        border-color: #f1d38a;
+        background: #fff8e7;
+        color: #7b5a12;
+      }
+      .admin-shortcuts {
+        display: grid;
+        gap: 0.45rem;
+      }
       .editor-list { display: grid; gap: 0.8rem; }
       .editor-item {
         border: 1px solid #d5e8f9;
@@ -75,7 +96,11 @@
     <header class="site-header">
       <div class="container header-inner">
         <strong>Админ-панель сайта</strong>
-        <div class="admin-actions"><a href="index.html" class="btn btn-outline">Открыть сайт</a></div>
+        <div class="admin-actions">
+          <a href="index.html" class="btn btn-outline" target="_blank" rel="noreferrer">Открыть сайт</a>
+          <button class="btn btn-outline" id="reload-config-btn" type="button">Обновить данные</button>
+          <button class="btn btn-outline danger" id="logout-btn" type="button">Выйти</button>
+        </div>
       </div>
     </header>
 
@@ -93,6 +118,16 @@
 
         <form class="admin-form" id="admin-form">
           <section class="tab-pane is-active" data-tab-content="services">
+            <section class="admin-card">
+              <div class="admin-actions admin-actions-between">
+                <div class="admin-shortcuts">
+                  <strong>Быстрая работа с сайтом</strong>
+                  <span class="hint">После правок нажми "Сохранить изменения", затем открой сайт в новой вкладке и проверь результат.</span>
+                </div>
+                <span class="status-pill" id="changes-indicator">Все изменения сохранены</span>
+              </div>
+            </section>
+
             <section class="admin-card">
               <h2>Услуги</h2>
               <div id="services-editor" class="editor-list"></div>
@@ -203,6 +238,6 @@
       </div>
     </main>
 
-    <script src="admin.js"></script>
+    <script src="admin.js?v=20260421-1"></script>
   </body>
 </html>

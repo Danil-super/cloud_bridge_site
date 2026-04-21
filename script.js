@@ -461,6 +461,14 @@ function renderFilePreview(previewContainer, files, onRemove) {
   });
 }
 
+function formatFileSize(bytes) {
+  const size = Number(bytes || 0);
+  if (size >= 1024 * 1024) {
+    return `${(size / (1024 * 1024)).toFixed(1)} МБ`;
+  }
+  return `${Math.max(1, Math.round(size / 1024))} КБ`;
+}
+
 function setupFloatingCta(form) {
   if (!form || document.querySelector('.floating-cta')) return;
   const btn = document.createElement('button');
@@ -486,19 +494,39 @@ function setupLeadForm() {
   const phoneInput = form.querySelector('input[name="phone"]');
   const commentInput = form.querySelector('textarea[name="comment"]');
   const fileInput = form.querySelector('input[name="files"]');
+  const maxFileSizeBytes = 20 * 1024 * 1024;
 
   let filePreview = null;
+  let fileHelper = null;
   let selectedFiles = [];
+  const updateFileHelper = () => {
+    if (!fileHelper) return;
+
+    if (selectedFiles.length === 0) {
+      fileHelper.textContent = 'Можно прикрепить до 5 файлов. Лимит: 20 МБ на каждый файл. Лишний файл можно удалить до отправки.';
+      return;
+    }
+
+    const totalBytes = selectedFiles.reduce((sum, file) => sum + Number(file.size || 0), 0);
+    fileHelper.textContent = `Выбрано файлов: ${selectedFiles.length}/5. Общий размер: ${formatFileSize(totalBytes)}.`;
+  };
   const refreshSelectedFiles = () => {
     renderFilePreview(filePreview, selectedFiles, (indexToRemove) => {
       selectedFiles = selectedFiles.filter((_, index) => index !== indexToRemove);
       refreshSelectedFiles();
+      clearFieldError(form, 'files');
     });
+    updateFileHelper();
   };
   if (fileInput) {
+    fileHelper = document.createElement('small');
+    fileHelper.className = 'field-helper';
+    fileInput.closest('label')?.insertAdjacentElement('afterend', fileHelper);
+
     filePreview = document.createElement('div');
     filePreview.className = 'file-preview-grid full-width';
-    fileInput.closest('label')?.insertAdjacentElement('afterend', filePreview);
+    fileHelper.insertAdjacentElement('afterend', filePreview);
+    updateFileHelper();
   }
 
   let commentCounter = null;
@@ -609,6 +637,14 @@ function setupLeadForm() {
       return;
     }
 
+    const oversizedFile = files.find((file) => Number(file.size || 0) > maxFileSizeBytes);
+    if (oversizedFile) {
+      setFieldError(form, 'files', `Файл "${oversizedFile.name}" превышает лимит 20 МБ.`);
+      note.textContent = 'Проверьте поля формы.';
+      note.style.color = '#b32c2c';
+      return;
+    }
+
     formData.set('name', name);
     formData.set('phone', phone);
     formData.set('comment', comment);
@@ -616,6 +652,7 @@ function setupLeadForm() {
 
     const submitButton = form.querySelector('button[type="submit"]');
     if (submitButton) submitButton.disabled = true;
+    if (fileInput) fileInput.disabled = true;
 
     note.textContent = 'Отправляем заявку... 0%';
     note.style.color = '#264f72';
@@ -637,11 +674,13 @@ function setupLeadForm() {
       form.reset();
       selectedFiles = [];
       if (filePreview) filePreview.innerHTML = '';
+      updateFileHelper();
     } catch (error) {
       note.textContent = error.message;
       note.style.color = '#b32c2c';
     } finally {
       if (submitButton) submitButton.disabled = false;
+      if (fileInput) fileInput.disabled = false;
     }
   });
 }
