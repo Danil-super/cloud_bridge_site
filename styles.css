@@ -491,6 +491,23 @@ a {
   text-overflow: ellipsis;
 }
 
+.file-preview-remove {
+  border: 1px solid #efb3b3;
+  background: #fff;
+  color: #9f2222;
+  border-radius: 9px;
+  min-height: 34px;
+  padding: 0.45rem 0.7rem;
+  font: inherit;
+  font-size: 0.78rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.file-preview-remove:hover {
+  background: #fff4f4;
+}
+
 .full-width,
 .form-note {
   grid-column: 1 / -1;

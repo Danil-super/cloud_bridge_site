@@ -418,11 +418,11 @@ function clearAllFieldErrors(form) {
   ['name', 'phone', 'comment', 'files'].forEach((field) => clearFieldError(form, field));
 }
 
-function renderFilePreview(previewContainer, files) {
+function renderFilePreview(previewContainer, files, onRemove) {
   if (!previewContainer) return;
   previewContainer.innerHTML = '';
 
-  files.forEach((file) => {
+  files.forEach((file, index) => {
     const item = document.createElement('div');
     item.className = 'file-preview-item';
 
@@ -445,6 +445,18 @@ function renderFilePreview(previewContainer, files) {
     meta.className = 'file-preview-name';
     meta.textContent = file.name;
     item.appendChild(meta);
+
+    const removeBtn = document.createElement('button');
+    removeBtn.type = 'button';
+    removeBtn.className = 'file-preview-remove';
+    removeBtn.textContent = 'Удалить';
+    removeBtn.addEventListener('click', () => {
+      if (typeof onRemove === 'function') {
+        onRemove(index);
+      }
+    });
+    item.appendChild(removeBtn);
+
     previewContainer.appendChild(item);
   });
 }
@@ -476,6 +488,13 @@ function setupLeadForm() {
   const fileInput = form.querySelector('input[name="files"]');
 
   let filePreview = null;
+  let selectedFiles = [];
+  const refreshSelectedFiles = () => {
+    renderFilePreview(filePreview, selectedFiles, (indexToRemove) => {
+      selectedFiles = selectedFiles.filter((_, index) => index !== indexToRemove);
+      refreshSelectedFiles();
+    });
+  };
   if (fileInput) {
     filePreview = document.createElement('div');
     filePreview.className = 'file-preview-grid full-width';
@@ -521,8 +540,9 @@ function setupLeadForm() {
 
   if (fileInput) {
     fileInput.addEventListener('change', () => {
-      const files = Array.from(fileInput.files || []).slice(0, 5);
-      renderFilePreview(filePreview, files);
+      selectedFiles = Array.from(fileInput.files || []).slice(0, 5);
+      refreshSelectedFiles();
+      fileInput.value = '';
       clearFieldError(form, 'files');
     });
   }
@@ -532,11 +552,12 @@ function setupLeadForm() {
     clearAllFieldErrors(form);
 
     const formData = new FormData(form);
+    formData.delete('files');
     const name = sanitizeNameInput(String(formData.get('name') || '').trim()).replace(/\s{2,}/g, ' ');
     const phoneRaw = String(formData.get('phone') || '').trim();
     const phone = normalizePhoneForSubmit(phoneRaw);
     const comment = sanitizeCommentInput(String(formData.get('comment') || '').trim()).replace(/\s{2,}/g, ' ');
-    const files = formData.getAll('files').filter((item) => item instanceof File && item.size > 0);
+    const files = selectedFiles.filter((item) => item instanceof File && item.size > 0);
 
     if (!isValidName(name)) {
       setFieldError(form, 'name', 'Имя: только буквы, пробел и дефис (2-60 символов).');
@@ -591,6 +612,7 @@ function setupLeadForm() {
     formData.set('name', name);
     formData.set('phone', phone);
     formData.set('comment', comment);
+    files.forEach((file) => formData.append('files', file));
 
     const submitButton = form.querySelector('button[type="submit"]');
     if (submitButton) submitButton.disabled = true;
@@ -613,6 +635,7 @@ function setupLeadForm() {
       note.textContent = 'Спасибо. Заявка успешно отправлена. Обычно связываемся в течение 10-15 минут.';
       note.style.color = '#1c6e2d';
       form.reset();
+      selectedFiles = [];
       if (filePreview) filePreview.innerHTML = '';
     } catch (error) {
       note.textContent = error.message;
