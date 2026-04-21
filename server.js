@@ -17,16 +17,23 @@ const port = Number(process.env.PORT || 4173);
 const maxUploadBytes = Number(process.env.MAX_UPLOAD_MB || 20) * 1024 * 1024;
 const maxVideoUploadBytes = Number(process.env.MAX_VIDEO_UPLOAD_MB || 200) * 1024 * 1024;
 const adminPassword = String(process.env.ADMIN_PASSWORD || '').trim();
+const powerAutomateWebhookUrl = String(process.env.POWER_AUTOMATE_WEBHOOK_URL || '').trim();
+const powerAutomateSecret = String(process.env.POWER_AUTOMATE_SECRET || '').trim();
 const adminSessionCookieName = 'admin_session';
 const adminSessionCookieValue = 'ok';
 const uploadDir = path.join(__dirname, 'uploads');
 const mediaDir = path.join(__dirname, 'assets', 'media');
+const dataDir = path.join(__dirname, 'data');
+const leadsCsvPath = path.join(dataDir, 'leads-excel.csv');
 
 if (!fs.existsSync(uploadDir)) {
   fs.mkdirSync(uploadDir, { recursive: true });
 }
 if (!fs.existsSync(mediaDir)) {
   fs.mkdirSync(mediaDir, { recursive: true });
+}
+if (!fs.existsSync(dataDir)) {
+  fs.mkdirSync(dataDir, { recursive: true });
 }
 
 const storage = multer.diskStorage({
@@ -141,6 +148,117 @@ function buildPublicBaseUrl(req) {
   }
 
   return `${protocol}://${host}`;
+}
+
+function csvCell(value) {
+  const normalized = String(value ?? '').replace(/\r?\n/g, ' ').trim();
+  return `"${normalized.replace(/"/g, '""')}"`;
+}
+
+function ensureLeadsCsvFile() {
+  if (fs.existsSync(leadsCsvPath)) {
+    return;
+  }
+
+  const header = [
+    'Дата',
+    'Имя',
+    'Телефон',
+    'Услуга',
+    'Комментарий',
+    'Количество файлов',
+    'Имена файлов',
+    'Ссылки на файлы',
+  ];
+
+  const contents = `\uFEFF${header.map(csvCell).join(';')}\n`;
+  fs.writeFileSync(leadsCsvPath, contents, 'utf8');
+}
+
+async function saveLeadToExcelFile({ name, phone, comment, service, files }) {
+  ensureLeadsCsvFile();
+
+  const createdAt = new Date().toLocaleString('ru-RU', {
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+  });
+
+  const fileNames = Array.isArray(files) ? files.map((file) => file.name).join(' | ') : '';
+  const fileUrls = Array.isArray(files) ? files.map((file) => file.url).join(' | ') : '';
+
+  const row = [
+    createdAt,
+    name,
+    phone,
+    service || 'Не выбрана',
+    comment,
+    Array.isArray(files) ? String(files.length) : '0',
+    fileNames,
+    fileUrls,
+  ];
+
+  fs.appendFileSync(leadsCsvPath, `${row.map(csvCell).join(';')}\n`, 'utf8');
+
+  return {
+    created: true,
+    file: path.relative(__dirname, leadsCsvPath),
+  };
+}
+
+async function sendLeadToPowerAutomate({ leadId, createdAtIso, name, phone, comment, service, files }) {
+  if (!powerAutomateWebhookUrl) {
+    return { created: false, reason: 'power_automate_not_configured' };
+  }
+
+  const response = await fetch(powerAutomateWebhookUrl, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      ...(powerAutomateSecret ? { 'X-Webhook-Secret': powerAutomateSecret } : {}),
+    },
+    body: JSON.stringify({
+      leadId,
+      createdAt: createdAtIso,
+      source: 'site',
+      service: service || 'Не выбрана',
+      name,
+      phone,
+      comment,
+      filesCount: Array.isArray(files) ? files.length : 0,
+      files: Array.isArray(files) ? files : [],
+      filesText: Array.isArray(files)
+        ? files.map((file) => `${file.name}: ${file.url}`).join(' | ')
+        : '',
+      status: 'Новая',
+      manager: '',
+      nextActionAt: '',
+      lastContactAt: '',
+      result: '',
+      isActual: 'Да',
+    }),
+  });
+
+  if (!response.ok) {
+    const body = await response.text();
+    throw new Error(`Power Automate error: ${response.status} ${body}`);
+  }
+
+  let payload = null;
+  try {
+    payload = await response.json();
+  } catch {
+    payload = null;
+  }
+
+  return {
+    created: true,
+    status: response.status,
+    response: payload,
+  };
 }
 
 function parseCookies(req) {
@@ -258,101 +376,6 @@ async function sendTelegramNotification({ name, phone, comment, service, files }
   throw lastError || new Error('Telegram send failed');
 }
 
-async function createAmoLead({ name, phone, comment, service }) {
-  const baseUrl = process.env.AMOCRM_BASE_URL;
-  const accessToken = process.env.AMOCRM_ACCESS_TOKEN;
-  const pipelineId = Number(process.env.AMOCRM_PIPELINE_ID || 0);
-  const statusId = Number(process.env.AMOCRM_STATUS_ID || 0);
-
-  if (!baseUrl || !accessToken) {
-    return { created: false, reason: 'amocrm_not_configured' };
-  }
-
-  const leadPayload = {
-    name: `Заявка с сайта: ${name}`,
-    custom_fields_values: [
-      {
-        field_name: 'Комментарий',
-        values: [{ value: comment }],
-      },
-      {
-        field_name: 'Услуга',
-        values: [{ value: service || 'Не выбрана' }],
-      },
-    ],
-  };
-
-  if (pipelineId) {
-    leadPayload.pipeline_id = pipelineId;
-  }
-
-  if (statusId) {
-    leadPayload.status_id = statusId;
-  }
-
-  const leadRes = await fetch(`${baseUrl}/api/v4/leads`, {
-    method: 'POST',
-    headers: {
-      Authorization: `Bearer ${accessToken}`,
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify([leadPayload]),
-  });
-
-  if (!leadRes.ok) {
-    const body = await leadRes.text();
-    throw new Error(`amoCRM lead error: ${leadRes.status} ${body}`);
-  }
-
-  const leadData = await leadRes.json();
-  const leadId = leadData?._embedded?.leads?.[0]?.id;
-
-  const contactPayload = {
-    name,
-    custom_fields_values: [
-      {
-        field_code: 'PHONE',
-        values: [{ value: phone, enum_code: 'WORK' }],
-      },
-    ],
-  };
-
-  const contactRes = await fetch(`${baseUrl}/api/v4/contacts`, {
-    method: 'POST',
-    headers: {
-      Authorization: `Bearer ${accessToken}`,
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify([contactPayload]),
-  });
-
-  if (!contactRes.ok) {
-    const body = await contactRes.text();
-    throw new Error(`amoCRM contact error: ${contactRes.status} ${body}`);
-  }
-
-  const contactData = await contactRes.json();
-  const contactId = contactData?._embedded?.contacts?.[0]?.id;
-
-  if (leadId && contactId) {
-    const linkRes = await fetch(`${baseUrl}/api/v4/leads/${leadId}/link`, {
-      method: 'POST',
-      headers: {
-        Authorization: `Bearer ${accessToken}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify([{ to_entity_id: contactId, to_entity_type: 'contacts' }]),
-    });
-
-    if (!linkRes.ok) {
-      const body = await linkRes.text();
-      throw new Error(`amoCRM lead-contact link error: ${linkRes.status} ${body}`);
-    }
-  }
-
-  return { created: true, leadId, contactId };
-}
-
 app.get('/admin-login.html', (_req, res) => {
   res.sendFile(path.join(__dirname, 'admin-login.html'));
 });
@@ -391,6 +414,13 @@ app.get('/admin', (_req, res) => {
 
 app.get('/admin.html', requireAdmin, (_req, res) => {
   res.sendFile(path.join(__dirname, 'admin.html'));
+});
+
+app.get('/api/admin/leads-export', requireAdmin, (_req, res) => {
+  ensureLeadsCsvFile();
+  res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+  res.setHeader('Content-Disposition', 'attachment; filename="zayavki-excel.csv"');
+  res.sendFile(leadsCsvPath);
 });
 
 app.use(express.static(__dirname));
@@ -440,12 +470,15 @@ app.post('/api/leads', upload.array('files', 5), async (req, res) => {
       });
     }
 
+    const createdAt = new Date();
+    const leadId = `lead-${createdAt.getTime()}`;
+
     const files = uploadedFiles.map((file) => ({
       name: file.originalname,
       url: `${buildPublicBaseUrl(req)}/uploads/${file.filename}`,
     }));
 
-    const [telegramResult, amocrmResult] = await Promise.all([
+    const [telegramResult, excelArchiveResult, powerAutomateResult] = await Promise.all([
       sendTelegramNotification({
         name,
         phone,
@@ -453,15 +486,43 @@ app.post('/api/leads', upload.array('files', 5), async (req, res) => {
         service,
         files,
       }).catch((error) => ({ sent: false, reason: error.message })),
-      createAmoLead({ name, phone, comment, service }).catch((error) => ({ created: false, reason: error.message })),
+      saveLeadToExcelFile({ name, phone, comment, service, files }).catch((error) => ({
+        created: false,
+        reason: error.message,
+      })),
+      sendLeadToPowerAutomate({
+        leadId,
+        createdAtIso: createdAt.toISOString(),
+        name,
+        phone,
+        comment,
+        service,
+        files,
+      }).catch((error) => ({
+        created: false,
+        reason: error.message,
+      })),
     ]);
+
+    if (!telegramResult.sent && !excelArchiveResult.created && !powerAutomateResult.created) {
+      return res.status(502).json({
+        ok: false,
+        message: 'Не удалось доставить заявку ни в один канал.',
+        delivery: {
+          telegram: telegramResult,
+          excelArchive: excelArchiveResult,
+          powerAutomate: powerAutomateResult,
+        },
+      });
+    }
 
     return res.json({
       ok: true,
       message: 'Заявка принята.',
       delivery: {
         telegram: telegramResult,
-        amocrm: amocrmResult,
+        excelArchive: excelArchiveResult,
+        powerAutomate: powerAutomateResult,
       },
     });
   } catch (error) {
