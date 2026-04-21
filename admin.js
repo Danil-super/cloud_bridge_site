@@ -1,5 +1,3 @@
-const STORAGE_KEY = 'cloudBridgeSiteConfig';
-
 const defaultConfig = {
   "metaTitle": "Облачный Мост - Замена счетчиков, сантехника и умный дом",
   "metaDescription": "Замена и установка счетчиков воды и тепла, сантехнические работы, подключение систем умного дома и облачный контроль SAURES. Москва и Московская область.",
@@ -135,13 +133,19 @@ const uploadVideoBtn = document.getElementById('upload-video-btn');
 const videoUploadStatus = document.getElementById('video-upload-status');
 const videoPreview = document.getElementById('video-preview');
 
-function loadConfig() {
+async function loadConfig() {
   try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    if (!raw) return defaultConfig;
-    return { ...defaultConfig, ...JSON.parse(raw) };
+    const response = await fetch('/api/admin/config', {
+      credentials: 'same-origin',
+    });
+    const payload = await response.json();
+    if (!response.ok || !payload.ok) {
+      throw new Error(payload.message || 'Не удалось загрузить настройки сайта.');
+    }
+    return { ...defaultConfig, ...(payload.config || {}) };
   } catch (error) {
     console.error(error);
+    if (saveStatus) saveStatus.textContent = 'Не удалось загрузить настройки с сервера. Показан шаблон.';
     return defaultConfig;
   }
 }
@@ -217,6 +221,24 @@ function createPriceCard(price = { service: '', price: '', details: '', image: '
   });
 
   return card;
+}
+
+async function uploadPriceImageFile(file) {
+  const body = new FormData();
+  body.append('image', file);
+
+  const response = await fetch('/api/admin/upload-image', {
+    method: 'POST',
+    body,
+    credentials: 'same-origin',
+  });
+  const payload = await response.json();
+
+  if (!response.ok || !payload.ok) {
+    throw new Error(payload.message || 'Ошибка загрузки изображения.');
+  }
+
+  return payload.path;
 }
 
 function createReviewCard(review = { quote: '', author: '' }) {
@@ -326,50 +348,95 @@ function fillForm(config) {
   renderReviewsEditor(config.reviews || []);
 }
 
-function saveConfig(event) {
+async function saveConfig(event) {
   event.preventDefault();
 
-  const config = {
-    metaTitle: form.metaTitle.value.trim(),
-    metaDescription: form.metaDescription.value.trim(),
-    region: form.region.value.trim(),
-    phoneDisplay: form.phoneDisplay.value.trim(),
-    phoneRaw: form.phoneRaw.value.replace(/\D/g, ''),
-    email: form.email.value.trim(),
-    workSchedule: form.workSchedule.value.trim(),
+  try {
+    if (saveStatus) saveStatus.textContent = 'Сохраняем...';
 
-    heroTitle: form.heroTitle.value.trim(),
-    heroText: form.heroText.value.trim(),
-    heroPrimaryCta: form.heroPrimaryCta.value.trim(),
-    heroBadges: readSimpleEditor(heroBadgesEditor),
+    const priceCards = Array.from(pricesEditor.querySelectorAll('.editor-item'));
+    for (const card of priceCards) {
+      const imageFileInput = card.querySelector('[data-field="imageFile"]');
+      const imageUrlInput = card.querySelector('[data-field="imageUrl"]');
+      const file = imageFileInput?.files?.[0];
 
-    sauresTitle: form.sauresTitle.value.trim(),
-    sauresText: form.sauresText.value.trim(),
-    sauresLink: form.sauresLink.value.trim(),
-    videoEyebrow: form.videoEyebrow.value.trim(),
-    videoTitle: form.videoTitle.value.trim(),
-    videoSrc: form.videoSrc.value.trim(),
-    aboutText: form.aboutText.value.trim(),
-    advantages: readSimpleEditor(advantagesEditor),
+      if (file) {
+        if (saveStatus) {
+          saveStatus.textContent = `Загружаем изображение: ${file.name}`;
+        }
+        const uploadedPath = await uploadPriceImageFile(file);
+        imageUrlInput.value = uploadedPath;
+        if (imageFileInput) imageFileInput.value = '';
+      }
+    }
 
-    services: readPairEditor(servicesEditor),
-    prices: readPricesFromEditor(),
-    steps: readPairEditor(stepsEditor),
-    reviews: readReviewsFromEditor(),
+    const config = {
+      metaTitle: form.metaTitle.value.trim(),
+      metaDescription: form.metaDescription.value.trim(),
+      region: form.region.value.trim(),
+      phoneDisplay: form.phoneDisplay.value.trim(),
+      phoneRaw: form.phoneRaw.value.replace(/\D/g, ''),
+      email: form.email.value.trim(),
+      workSchedule: form.workSchedule.value.trim(),
 
-    slogan: form.slogan.value.trim(),
-    inn: form.inn.value.trim(),
-    ogrnip: form.ogrnip.value.trim(),
-  };
+      heroTitle: form.heroTitle.value.trim(),
+      heroText: form.heroText.value.trim(),
+      heroPrimaryCta: form.heroPrimaryCta.value.trim(),
+      heroBadges: readSimpleEditor(heroBadgesEditor),
 
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(config));
-  saveStatus.textContent = `Сохранено: ${new Date().toLocaleTimeString('ru-RU')}`;
+      sauresTitle: form.sauresTitle.value.trim(),
+      sauresText: form.sauresText.value.trim(),
+      sauresLink: form.sauresLink.value.trim(),
+      videoEyebrow: form.videoEyebrow.value.trim(),
+      videoTitle: form.videoTitle.value.trim(),
+      videoSrc: form.videoSrc.value.trim(),
+      aboutText: form.aboutText.value.trim(),
+      advantages: readSimpleEditor(advantagesEditor),
+
+      services: readPairEditor(servicesEditor),
+      prices: readPricesFromEditor(),
+      steps: readPairEditor(stepsEditor),
+      reviews: readReviewsFromEditor(),
+
+      slogan: form.slogan.value.trim(),
+      inn: form.inn.value.trim(),
+      ogrnip: form.ogrnip.value.trim(),
+    };
+
+    const response = await fetch('/api/admin/config', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'same-origin',
+      body: JSON.stringify(config),
+    });
+    const payload = await response.json();
+
+    if (!response.ok || !payload.ok) {
+      throw new Error(payload.message || 'Не удалось сохранить настройки сайта.');
+    }
+
+    saveStatus.textContent = `Сохранено на сервере: ${new Date().toLocaleTimeString('ru-RU')}`;
+  } catch (error) {
+    saveStatus.textContent = error.message;
+  }
 }
 
-function resetConfig() {
-  localStorage.removeItem(STORAGE_KEY);
+async function resetConfig() {
   fillForm(defaultConfig);
-  saveStatus.textContent = 'Сброшено к шаблону. Не забудьте сохранить.';
+  saveStatus.textContent = 'Шаблон загружен. Сохраняем на сервер...';
+
+  const response = await fetch('/api/admin/config', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    credentials: 'same-origin',
+    body: JSON.stringify(defaultConfig),
+  });
+  const payload = await response.json();
+  if (!response.ok || !payload.ok) {
+    throw new Error(payload.message || 'Не удалось сбросить настройки.');
+  }
+
+  saveStatus.textContent = 'Сброшено к шаблону и сохранено на сервере.';
 }
 
 function setupTabs() {
@@ -455,7 +522,13 @@ addReviewBtn.addEventListener('click', () => {
 });
 
 form.addEventListener('submit', saveConfig);
-resetBtn.addEventListener('click', resetConfig);
+resetBtn.addEventListener('click', () => {
+  resetConfig().catch((error) => {
+    saveStatus.textContent = error.message;
+  });
+});
 uploadVideoBtn?.addEventListener('click', uploadVideoFile);
-fillForm(loadConfig());
 setupTabs();
+loadConfig().then((config) => {
+  fillForm(config);
+});

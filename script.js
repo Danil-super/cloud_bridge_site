@@ -1,5 +1,3 @@
-const STORAGE_KEY = 'cloudBridgeSiteConfig';
-
 const defaultConfig = {
   "metaTitle": "Облачный Мост - Замена счетчиков, сантехника и умный дом",
   "metaDescription": "Замена и установка счетчиков воды и тепла, сантехнические работы, подключение систем умного дома и облачный контроль SAURES. Москва и Московская область.",
@@ -112,22 +110,26 @@ const defaultConfig = {
   ]
 };
 
-function loadConfig() {
+let config = { ...defaultConfig };
+
+async function loadConfig() {
   try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    if (!raw) return defaultConfig;
-    const parsed = JSON.parse(raw);
-    return {
+    const response = await fetch('/api/site-config');
+    const payload = await response.json();
+
+    if (!response.ok || !payload.ok) {
+      throw new Error(payload.message || 'Не удалось загрузить конфигурацию сайта.');
+    }
+
+    config = {
       ...defaultConfig,
-      ...parsed,
+      ...(payload.config || {}),
     };
   } catch (error) {
     console.error('Ошибка загрузки конфигурации:', error);
-    return defaultConfig;
+    config = { ...defaultConfig };
   }
 }
-
-const config = loadConfig();
 
 function setText(id, value) {
   const el = document.getElementById(id);
@@ -621,7 +623,9 @@ function setupLeadForm() {
   });
 }
 
-applyConfig();
-setupRevealAnimations();
-setupScrollToTopLinks();
-setupLeadForm();
+loadConfig().finally(() => {
+  applyConfig();
+  setupRevealAnimations();
+  setupScrollToTopLinks();
+  setupLeadForm();
+});

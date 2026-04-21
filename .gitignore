@@ -3,3 +3,5 @@ node_modules/
 uploads/
 .DS_Store
 *.log
+data/site-config.json
+data/leads-excel.csv
