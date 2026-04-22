@@ -19,6 +19,8 @@ const port = Number(process.env.PORT || 4173);
 const maxUploadBytes = Number(process.env.MAX_UPLOAD_MB || 20) * 1024 * 1024;
 const maxVideoUploadBytes = Number(process.env.MAX_VIDEO_UPLOAD_MB || 200) * 1024 * 1024;
 const adminPassword = String(process.env.ADMIN_PASSWORD || '').trim();
+const googleSheetsWebhookUrl = String(process.env.GOOGLE_SHEETS_WEBHOOK_URL || '').trim();
+const googleSheetsSecret = String(process.env.GOOGLE_SHEETS_SECRET || '').trim();
 const powerAutomateWebhookUrl = String(process.env.POWER_AUTOMATE_WEBHOOK_URL || '').trim();
 const powerAutomateSecret = String(process.env.POWER_AUTOMATE_SECRET || '').trim();
 const fileLinkSecret = String(process.env.FILE_LINK_SECRET || adminPassword || 'change-me').trim();
@@ -592,6 +594,67 @@ async function sendLeadToPowerAutomate({ leadId, createdAtIso, name, phone, comm
   };
 }
 
+async function sendLeadToGoogleSheets({ leadId, createdAtIso, name, phone, comment, service, files }) {
+  if (!googleSheetsWebhookUrl) {
+    return { created: false, reason: 'google_sheets_not_configured' };
+  }
+
+  const createdAtDate = new Date(createdAtIso);
+  const dateText = createdAtDate.toLocaleDateString('ru-RU');
+  const timeText = createdAtDate.toLocaleTimeString('ru-RU', {
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+  });
+  const filesText = Array.isArray(files)
+    ? files.map((file) => `${file.name}: ${file.url}`).join(' | ')
+    : '';
+
+  const response = await fetch(googleSheetsWebhookUrl, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      secret: googleSheetsSecret,
+      leadId,
+      createdAt: createdAtIso,
+      date: dateText,
+      time: timeText,
+      name,
+      phone,
+      service: service || 'Не выбрана',
+      comment,
+      filesCount: Array.isArray(files) ? files.length : 0,
+      files,
+      filesText,
+      source: 'Сайт',
+      status: 'Новая',
+      manager: '',
+      managerComment: '',
+      updatedAt: createdAtIso,
+    }),
+  });
+
+  if (!response.ok) {
+    const body = await response.text();
+    throw new Error(`Google Sheets webhook error: ${response.status} ${body}`);
+  }
+
+  let payload = null;
+  try {
+    payload = await response.json();
+  } catch {
+    payload = null;
+  }
+
+  return {
+    created: true,
+    status: response.status,
+    response: payload,
+  };
+}
+
 function parseCookies(req) {
   const header = String(req.headers.cookie || '');
   const cookies = {};
@@ -873,7 +936,7 @@ app.post('/api/leads', leadSubmissionRateLimit, upload.array('files', 5), async 
       url: buildSignedFileUrl(req, file.filename),
     }));
 
-    const [telegramResult, excelArchiveResult, powerAutomateResult] = await Promise.all([
+    const [telegramResult, excelArchiveResult, googleSheetsResult, powerAutomateResult] = await Promise.all([
       sendTelegramNotification({
         name,
         phone,
@@ -882,6 +945,18 @@ app.post('/api/leads', leadSubmissionRateLimit, upload.array('files', 5), async 
         files,
       }).catch((error) => ({ sent: false, reason: error.message })),
       saveLeadToExcelFile({ name, phone, comment, service, files }).catch((error) => ({
+        created: false,
+        reason: error.message,
+      })),
+      sendLeadToGoogleSheets({
+        leadId,
+        createdAtIso: createdAt.toISOString(),
+        name,
+        phone,
+        comment,
+        service,
+        files,
+      }).catch((error) => ({
         created: false,
         reason: error.message,
       })),
@@ -899,13 +974,19 @@ app.post('/api/leads', leadSubmissionRateLimit, upload.array('files', 5), async 
       })),
     ]);
 
-    if (!telegramResult.sent && !excelArchiveResult.created && !powerAutomateResult.created) {
+    if (
+      !telegramResult.sent &&
+      !excelArchiveResult.created &&
+      !googleSheetsResult.created &&
+      !powerAutomateResult.created
+    ) {
       return res.status(502).json({
         ok: false,
         message: 'Не удалось доставить заявку ни в один канал.',
         delivery: {
           telegram: telegramResult,
           excelArchive: excelArchiveResult,
+          googleSheets: googleSheetsResult,
           powerAutomate: powerAutomateResult,
         },
       });
@@ -917,6 +998,7 @@ app.post('/api/leads', leadSubmissionRateLimit, upload.array('files', 5), async 
       delivery: {
         telegram: telegramResult,
         excelArchive: excelArchiveResult,
+        googleSheets: googleSheetsResult,
         powerAutomate: powerAutomateResult,
       },
     });
