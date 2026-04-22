@@ -1,4 +1,4 @@
-const SPREADSHEET_ID = '1RYaED0_XElrkB18T-D-Q2l_2sfdvKujBYV31g_bdNco';
+const SPREADSHEET_ID = '13yOKr0fBmE0GjDtNBKRaJbklNoqW_ouRH4ni0SSbnv0';
 const SHEET_NAME = 'Заявки';
 const WEBHOOK_SECRET = 'CHANGE_ME_TO_A_LONG_RANDOM_SECRET';
 
